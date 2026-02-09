@@ -1,4 +1,4 @@
-# Copyright 2024-2025 Nexa AI, Inc.
+# Copyright 2024-2026 Nexa AI, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -268,8 +268,8 @@ with gr.Blocks(title="RAG System") as demo:
             
             # File uploader for documents
             uploader = gr.Files(
-                label="Upload files (txt/pdf/docx)",
-                file_types=[".txt", ".pdf", ".docx"],
+                label="Upload files (txt/docx)",
+                file_types=[".txt", ".docx"],
                 file_count="multiple",
             )
             

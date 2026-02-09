@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,10 +76,6 @@ func (vci VlmCreateInput) toCPtr() *C.ml_VlmCreateInput {
 	if vci.Config.ChatTemplateContent != "" {
 		cPtr.config.chat_template_content = C.CString(vci.Config.ChatTemplateContent)
 	}
-	// Add system prompt support
-	if vci.Config.SystemPrompt != "" {
-		cPtr.config.system_prompt = C.CString(vci.Config.SystemPrompt)
-	}
 
 	return cPtr
 }
@@ -109,9 +105,6 @@ func freeVlmCreateInput(cPtr *C.ml_VlmCreateInput) {
 		}
 		if cPtr.config.chat_template_content != nil {
 			C.free(unsafe.Pointer(cPtr.config.chat_template_content))
-		}
-		if cPtr.config.system_prompt != nil {
-			C.free(unsafe.Pointer(cPtr.config.system_prompt))
 		}
 
 		// Free the main structure

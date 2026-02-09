@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,9 +169,8 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 			ModelName: manifest.ModelName,
 			ModelPath: modelfile,
 			Config: nexa_sdk.ModelConfig{
-				NCtx:         param.NCtx,
-				NGpuLayers:   param.NGpuLayers,
-				SystemPrompt: param.SystemPrompt,
+				NCtx:       param.NCtx,
+				NGpuLayers: param.NGpuLayers,
 			},
 			PluginID: manifest.PluginId,
 			DeviceID: manifest.DeviceId,
@@ -191,9 +190,8 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 			MmprojPath:    mmproj,
 			TokenizerPath: tokenizer,
 			Config: nexa_sdk.ModelConfig{
-				NCtx:         param.NCtx,
-				NGpuLayers:   param.NGpuLayers,
-				SystemPrompt: param.SystemPrompt,
+				NCtx:       param.NCtx,
+				NGpuLayers: param.NGpuLayers,
 			},
 			PluginID: manifest.PluginId,
 			DeviceID: manifest.DeviceId,

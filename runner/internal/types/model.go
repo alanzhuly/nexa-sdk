@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,9 +86,6 @@ func (m ModelManifest) GetSize() int64 {
 type ModelParam struct {
 	NCtx       int32
 	NGpuLayers int32
-
-	// npu only
-	SystemPrompt string
 }
 
 type DownloadInfo struct {

@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ import (
 	"unicode"
 
 	"github.com/bytedance/sonic"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/spf13/cobra"
 
 	"github.com/NexaAI/nexa-sdk/runner/cmd/nexa-cli/common"
@@ -136,14 +136,10 @@ func run() *cobra.Command {
 		switch err {
 		case nil:
 			os.Exit(0)
-		case nexa_sdk.ErrCommonModelLoad:
-			fmt.Println(modelLoadFailMsg)
-		case nexa_sdk.ErrLlmTokenizationContextLength:
-			fmt.Println(render.GetTheme().Info.Sprintf("Context length exceeded, please start a new conversation"))
 		default:
 			fmt.Println(render.GetTheme().Error.Sprintf("Error: %s", err))
+			os.Exit(1)
 		}
-		os.Exit(1)
 	}
 	return runCmd
 }
@@ -184,6 +180,7 @@ func runCompletions(manifest types.ModelManifest, quant string) error {
 	processor := &common.Processor{
 		HideThink: hideThink,
 		ParseFile: manifest.ModelType == types.ModelTypeVLM,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, images, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(images) > 0 || len(audios) > 0 {
@@ -331,6 +328,7 @@ func runEmbeddings(manifest types.ModelManifest, quant string) error {
 
 	processor := &common.Processor{
 		ParseFile: manifest.ModelType == types.ModelTypeVLM,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			start := time.Now()
@@ -413,6 +411,7 @@ func runReranking(manifest types.ModelManifest, quant string) error {
 	const SEP = "\\n"
 	processor := &common.Processor{
 		ParseFile: manifest.ModelType == types.ModelTypeVLM,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			parsedPrompt := strings.Split(prompt, SEP)
@@ -455,18 +454,18 @@ func runReranking(manifest types.ModelManifest, quant string) error {
 			fmt.Println(render.GetTheme().Success.Sprintf("✓ Reranking completed successfully. Generated %d scores", len(res.Result)))
 
 			// Display results
-			data := ""
+			var data strings.Builder
 			for i, doc := range document {
 				if i < len(res.Result) {
 					line := fmt.Sprintf("\n%s [%d]: %s\n", render.GetTheme().Info.Sprintf("Document"), i+1, doc)
 					onToken(line)
-					data += line
+					data.WriteString(line)
 					line = fmt.Sprintf("%s: %.6f\n", render.GetTheme().Info.Sprintf("Score"), res.Result[i])
 					onToken(line)
-					data += line
+					data.WriteString(line)
 				}
 			}
-			return data, profileData, err
+			return data.String(), profileData, err
 		},
 	}
 
@@ -519,6 +518,7 @@ func runAudioSpeech(manifest types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
+		Verbose:  verbose,
 		TestMode: testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 
@@ -597,8 +597,9 @@ func runAudioTranscription(manifest types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
-		TestMode:  testMode,
 		ParseFile: true,
+		Verbose:   verbose,
+		TestMode:  testMode,
 		Run: func(prompt string, _, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(audios) == 0 {
 				return "", nexa_sdk.ProfileData{}, common.ErrNoAudio
@@ -692,8 +693,9 @@ func runAudioDiarize(manifest types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
-		TestMode:  testMode,
 		ParseFile: true,
+		Verbose:   verbose,
+		TestMode:  testMode,
 		Run: func(_ string, _, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(audios) == 0 {
 				return "", nexa_sdk.ProfileData{}, common.ErrNoAudio
@@ -792,8 +794,9 @@ func runCV(manifest types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
-		TestMode:  testMode,
 		ParseFile: true,
+		Verbose:   verbose,
+		TestMode:  testMode,
 		Run: func(_ string, images, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			start := time.Now()
 
@@ -835,15 +838,15 @@ func runCV(manifest types.ModelManifest, quant string) error {
 			onToken("\n")
 			onToken(render.GetTheme().Info.Sprintf("  Found %d results\n", len(res.Results)))
 
-			data := ""
+			var data strings.Builder
 			for _, cvResult := range res.Results {
 				result := fmt.Sprintf("[%s] %s\n",
 					render.GetTheme().Info.Sprintf("%.3f", cvResult.Confidence),
 					render.GetTheme().Success.Sprintf("\"%s\"", cvResult.Text))
 				onToken(result)
-				data += result
+				data.WriteString(result)
 			}
-			return data, profileData, err
+			return data.String(), profileData, err
 		},
 	}
 	if input != "" {
@@ -885,6 +888,7 @@ func runImagesGenerations(manifest types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
+		Verbose:  verbose,
 		TestMode: testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			start := time.Now()

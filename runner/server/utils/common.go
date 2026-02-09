@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ func SaveURIToTempFile(uri string) (string, error) {
 
 	// Detect content type
 	contentType := http.DetectContentType(data)
-	
+
 	// Convert WebP to PNG for compatibility with native SDK
 	if strings.HasPrefix(contentType, "image/webp") || strings.HasSuffix(strings.ToLower(u.Path), ".webp") {
 		img, _, err := image.Decode(bytes.NewReader(data))
@@ -109,7 +109,7 @@ func SaveURIToTempFile(uri string) (string, error) {
 	if exts, err := mime.ExtensionsByType(contentType); err == nil && len(exts) > 0 {
 		fileExt = exts[0]
 	}
-	
+
 	tmpFile, err := os.CreateTemp("", "uri-*"+fileExt)
 	if err != nil {
 		return "", err

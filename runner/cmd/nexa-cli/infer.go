@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,21 +41,18 @@ import (
 	nexa_sdk "github.com/NexaAI/nexa-sdk/runner/nexa-sdk"
 )
 
-const modelLoadFailMsg = `⚠️ Oops. Model failed to load.
-
-👉 Try these:
-- Verify your system meets the model's requirements.
-- Seek help in our discord or slack.`
-
 var (
 	// disableStream *bool // reuse in run.go
 	ngl            int32
 	nctx           int32
 	maxTokens      int32
+	stop           []string
+	stopFile       string
 	imageMaxLength int32
 	enableThink    bool
 	hideThink      bool
 	prompt         []string
+	tokenFile      string
 	taskType       string
 	query          string
 	document       []string
@@ -106,11 +103,14 @@ var (
 		llmFlags.Int32VarP(&ngl, "ngl", "n", 999, "num of layers pass to gpu")
 		llmFlags.Int32VarP(&nctx, "nctx", "", 4096, "context window size")
 		llmFlags.Int32VarP(&maxTokens, "max-tokens", "", 2048, "max tokens")
+		llmFlags.StringArrayVarP(&stop, "stop", "", nil, "stop sequences")
+		llmFlags.StringVarP(&stopFile, "stop-file", "", "", "file containing stop sequences")
 		llmFlags.BoolVarP(&enableThink, "enable-think", "", true, "enable thinking mode")
 		llmFlags.BoolVarP(&hideThink, "hide-think", "", false, "hide thinking output")
 		llmFlags.StringVarP(&systemPrompt, "system-prompt", "s", "", "system prompt to set model behavior")
 		llmFlags.StringVarP(&input, "input", "i", "", "prompt txt file")
 		llmFlags.StringArrayVarP(&prompt, "prompt", "p", nil, "pass prompt")
+		llmFlags.StringVarP(&tokenFile, "token-file", "t", "", "path to token file (space-separated token IDs)")
 		return llmFlags
 	}()
 	vlmFlags = func() *pflag.FlagSet {
@@ -275,8 +275,35 @@ func infer() *cobra.Command {
 		switch err {
 		case nil:
 			os.Exit(0)
+		case nexa_sdk.ErrCommonNotSupport:
+			fmt.Println(render.GetTheme().Error.Sprint(`
+⚠️ Oops. This model type is not supported yet.
+
+👉 Try these:
+- Check back later for updates.
+- See help in our discord or slack.`))
 		case nexa_sdk.ErrCommonModelLoad:
-			fmt.Println(modelLoadFailMsg)
+			fmt.Println(render.GetTheme().Error.Sprint(`
+⚠️ Oops. Model failed to load.
+
+👉 Try these:
+- Redownload the model.
+- Verify your system meets the model's requirements.
+- See help in our discord or slack.`))
+		case nexa_sdk.ErrCommonPluginLoad:
+			fmt.Println(render.GetTheme().Error.Sprint(`
+⚠️ Oops. Plugin failed to load.
+
+👉 Try these:
+- Ensure all plugin dependencies are correct.
+- See help in our discord or slack.`))
+		case nexa_sdk.ErrCommonPluginInvalid:
+			fmt.Println(render.GetTheme().Error.Sprint(`
+⚠️ Oops. Plugin is invalid.
+
+👉 Try these:
+- This model may not be compatible with your system. Try another model.
+- See help in our discord or slack.`))
 		case nexa_sdk.ErrLlmTokenizationContextLength:
 			fmt.Println(render.GetTheme().Info.Sprintf("Context length exceeded, please start a new conversation"))
 		default:
@@ -349,6 +376,23 @@ func getPromptOrInput() (string, error) {
 	return "", io.EOF
 }
 
+func loadStopSequences() ([]string, error) {
+	var stopSequences []string
+	if stopFile != "" {
+		content, err := os.ReadFile(stopFile)
+		if err != nil {
+			return nil, err
+		}
+		for line := range strings.SplitSeq(string(content), "\n") {
+			if line != "" {
+				stopSequences = append(stopSequences, line)
+			}
+		}
+	}
+	stopSequences = append(stopSequences, stop...)
+	return stopSequences, nil
+}
+
 func inferLLM(manifest *types.ModelManifest, quant string) error {
 	samplerConfig := &nexa_sdk.SamplerConfig{
 		Temperature:       temperature,
@@ -363,6 +407,10 @@ func inferLLM(manifest *types.ModelManifest, quant string) error {
 		GrammarString:     grammarString,
 		EnableJson:        enableJson,
 	}
+	stopSequences, err := loadStopSequences()
+	if err != nil {
+		return err
+	}
 
 	s := store.Get()
 	modelfile := s.ModelfilePath(manifest.Name, manifest.ModelFile[quant].Name)
@@ -375,16 +423,14 @@ func inferLLM(manifest *types.ModelManifest, quant string) error {
 		PluginID:  manifest.PluginId,
 		DeviceID:  manifest.DeviceId,
 		Config: nexa_sdk.ModelConfig{
-			NCtx:         nctx,
-			NGpuLayers:   ngl,
-			SystemPrompt: systemPrompt, // TODO: align npu
+			NCtx:       nctx,
+			NGpuLayers: ngl,
 		},
 	})
 	spin.Stop()
 
 	if err != nil {
-		slog.Error("failed to create LLM", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
@@ -393,40 +439,91 @@ func inferLLM(manifest *types.ModelManifest, quant string) error {
 		history = append(history, nexa_sdk.LlmChatMessage{Role: nexa_sdk.LLMRoleSystem, Content: systemPrompt})
 	}
 
+	// Check if using token ID input mode
+	var tokenIDs []int32
+	if tokenFile != "" {
+		content, err := os.ReadFile(tokenFile)
+		if err != nil {
+			return fmt.Errorf("failed to read token file: %w", err)
+		}
+		for field := range strings.FieldsSeq(string(content)) {
+			tokenID, err := strconv.ParseInt(field, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid token ID: %s", field)
+			}
+			tokenIDs = append(tokenIDs, int32(tokenID))
+		}
+		fmt.Println(render.GetTheme().Info.Sprintf("Using token IDs from file: %s (%d tokens)", tokenFile, len(tokenIDs)))
+	}
+
 	processor := &common.Processor{
 		HideThink: hideThink,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
-			history = append(history, nexa_sdk.LlmChatMessage{Role: nexa_sdk.LLMRoleUser, Content: prompt})
+			var res nexa_sdk.LlmGenerateOutput
+			var err error
 
-			templateOutput, err := p.ApplyChatTemplate(nexa_sdk.LlmApplyChatTemplateInput{
-				Messages:            history,
-				EnableThink:         enableThink,
-				AddGenerationPrompt: true,
-			})
-			if err != nil {
-				return "", nexa_sdk.ProfileData{}, err
+			if len(tokenIDs) > 0 {
+				// When using token IDs, skip chat template and use IDs directly
+				res, err = p.Generate(nexa_sdk.LlmGenerateInput{
+					InputIDs: tokenIDs,
+					OnToken:  onToken,
+					Config: &nexa_sdk.GenerationConfig{
+						MaxTokens:     maxTokens,
+						SamplerConfig: samplerConfig,
+					},
+				})
+				if err != nil {
+					return "", nexa_sdk.ProfileData{}, err
+				}
+				// Clear tokenIDs after use so subsequent calls use normal mode
+				tokenIDs = nil
+			} else {
+				// Normal text prompt mode with chat template
+				history = append(history, nexa_sdk.LlmChatMessage{Role: nexa_sdk.LLMRoleUser, Content: prompt})
+
+				templateOutput, err := p.ApplyChatTemplate(nexa_sdk.LlmApplyChatTemplateInput{
+					Messages:            history,
+					EnableThink:         enableThink,
+					AddGenerationPrompt: true,
+				})
+				if err != nil {
+					return "", nexa_sdk.ProfileData{}, err
+				}
+
+				res, err = p.Generate(nexa_sdk.LlmGenerateInput{
+					PromptUTF8: templateOutput.FormattedText,
+					OnToken:    onToken,
+					Config: &nexa_sdk.GenerationConfig{
+						MaxTokens:     maxTokens,
+						Stop:          stopSequences,
+						SamplerConfig: samplerConfig,
+					},
+				})
+
+				if err != nil {
+					return "", nexa_sdk.ProfileData{}, err
+				}
+
+				history = append(history, nexa_sdk.LlmChatMessage{Role: nexa_sdk.LLMRoleAssistant, Content: res.FullText})
 			}
 
-			res, err := p.Generate(nexa_sdk.LlmGenerateInput{
-				PromptUTF8: templateOutput.FormattedText,
-				OnToken:    onToken,
-				Config: &nexa_sdk.GenerationConfig{
-					MaxTokens:     maxTokens,
-					SamplerConfig: samplerConfig,
-				},
-			},
-			)
-			if err != nil {
-				return "", nexa_sdk.ProfileData{}, err
-			}
-
-			history = append(history, nexa_sdk.LlmChatMessage{Role: nexa_sdk.LLMRoleAssistant, Content: res.FullText})
 			return res.FullText, res.ProfileData, nil
 		},
 	}
 
-	if len(prompt) > 0 || input != "" {
+	if len(tokenIDs) > 0 {
+		// Token ID mode: return empty prompt once, then EOF to exit after first round
+		firstCall := true
+		processor.GetPrompt = func() (string, error) {
+			if firstCall {
+				firstCall = false
+				return "", nil // Trigger first round with empty prompt (token IDs will be used)
+			}
+			return "", io.EOF // Exit after first round
+		}
+	} else if len(prompt) > 0 || input != "" {
 		processor.GetPrompt = getPromptOrInput
 	} else {
 		repl := common.Repl{
@@ -472,6 +569,10 @@ func inferVLM(manifest *types.ModelManifest, quant string) error {
 		GrammarString:     grammarString,
 		EnableJson:        enableJson,
 	}
+	stopSequences, err := loadStopSequences()
+	if err != nil {
+		return err
+	}
 
 	s := store.Get()
 	modelfile := s.ModelfilePath(manifest.Name, manifest.ModelFile[quant].Name)
@@ -493,16 +594,15 @@ func inferVLM(manifest *types.ModelManifest, quant string) error {
 		PluginID:      manifest.PluginId,
 		DeviceID:      manifest.DeviceId,
 		Config: nexa_sdk.ModelConfig{
-			NCtx:         nctx,
-			NGpuLayers:   ngl,
-			SystemPrompt: systemPrompt,
+			NCtx:       nctx,
+			NGpuLayers: ngl,
 		},
 	})
 	spin.Stop()
 
 	if err != nil {
 		slog.Error("failed to create VLM", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
@@ -514,6 +614,7 @@ func inferVLM(manifest *types.ModelManifest, quant string) error {
 	processor := &common.Processor{
 		ParseFile: true,
 		HideThink: hideThink,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, images, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			msg := nexa_sdk.VlmChatMessage{Role: nexa_sdk.VlmRoleUser}
@@ -540,6 +641,7 @@ func inferVLM(manifest *types.ModelManifest, quant string) error {
 				OnToken:    onToken,
 				Config: &nexa_sdk.GenerationConfig{
 					MaxTokens:      maxTokens,
+					Stop:           stopSequences,
 					SamplerConfig:  samplerConfig,
 					ImagePaths:     images,
 					ImageMaxLength: imageMaxLength,
@@ -615,12 +717,13 @@ func inferEmbedder(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create embedder", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
 	processor := &common.Processor{
 		ParseFile: true,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(prompt string, images, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			embedInput := nexa_sdk.EmbedderEmbedInput{
@@ -697,12 +800,13 @@ func inferReranker(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create reranker", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
 	const SEP = "\\n"
 	processor := &common.Processor{
+		Verbose:  verbose,
 		TestMode: testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			parsedPrompt := strings.Split(prompt, SEP)
@@ -732,18 +836,18 @@ func inferReranker(manifest *types.ModelManifest, quant string) error {
 			fmt.Println(render.GetTheme().Success.Sprintf("✓ Reranking completed successfully. Generated %d scores", len(result.Scores)))
 
 			// Display results
-			data := ""
+			var data strings.Builder
 			for i, doc := range document {
 				if i < len(result.Scores) {
 					line := fmt.Sprintf("\n%s [%d]: %s\n", render.GetTheme().Info.Sprintf("Document"), i+1, doc)
 					onToken(line)
-					data += line
+					data.WriteString(line)
 					line = fmt.Sprintf("%s: %.6f\n", render.GetTheme().Info.Sprintf("Score"), result.Scores[i])
 					onToken(line)
-					data += line
+					data.WriteString(line)
 				}
 			}
-			return data, result.ProfileData, nil
+			return data.String(), result.ProfileData, nil
 		},
 	}
 
@@ -788,7 +892,7 @@ func inferTTS(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create TTS", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
@@ -802,6 +906,7 @@ func inferTTS(manifest *types.ModelManifest, quant string) error {
 	}
 
 	processor := &common.Processor{
+		Verbose:  verbose,
 		TestMode: testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			textToSynthesize := strings.TrimSpace(prompt)
@@ -874,7 +979,7 @@ func inferASR(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create ASR", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
@@ -889,6 +994,7 @@ func inferASR(manifest *types.ModelManifest, quant string) error {
 
 	processor := &common.Processor{
 		ParseFile: true,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(_ string, _, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(audios) == 0 {
@@ -1044,12 +1150,13 @@ func inferDiarize(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create diarization model", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
 	processor := &common.Processor{
 		ParseFile: true,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(_ string, _, audios []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(audios) == 0 {
@@ -1150,12 +1257,13 @@ func inferCV(manifest *types.ModelManifest, quant string) error {
 
 	if err != nil {
 		slog.Error("failed to create CV", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
 	processor := &common.Processor{
 		ParseFile: true,
+		Verbose:   verbose,
 		TestMode:  testMode,
 		Run: func(_ string, images, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			if len(images) == 0 {
@@ -1202,12 +1310,18 @@ func inferCV(manifest *types.ModelManifest, quant string) error {
 				}
 			}
 
-			outputPath, err := logic.CVPostProcess(images[0], result.Results)
-			if err != nil {
-				return data, nexa_sdk.ProfileData{}, err
-			}
+			// Only create output image if there are meaningful bboxes or masks to draw
+			for _, cvResult := range result.Results {
+				if (cvResult.BBox.Width > 0 && cvResult.BBox.Height > 0) || len(cvResult.Mask) > 0 {
+					outputPath, err := logic.CVPostProcess(images[0], result.Results)
+					if err != nil {
+						return data, nexa_sdk.ProfileData{}, err
+					}
 
-			onToken(render.GetTheme().Success.Sprintf("  Result drawn and saved to: %s\n", outputPath))
+					onToken(render.GetTheme().Success.Sprintf("  Result drawn and saved to: %s\n", outputPath))
+					break
+				}
+			}
 
 			return data, nexa_sdk.ProfileData{}, nil
 		},
@@ -1249,11 +1363,12 @@ func inferImageGen(manifest *types.ModelManifest, _ string) error {
 
 	if err != nil {
 		slog.Error("failed to create ImageGen", "error", err)
-		return nexa_sdk.ErrCommonModelLoad
+		return err
 	}
 	defer p.Destroy()
 
 	processor := &common.Processor{
+		Verbose:  verbose,
 		TestMode: testMode,
 		Run: func(prompt string, _, _ []string, onToken func(string) bool) (string, nexa_sdk.ProfileData, error) {
 			textPrompt := strings.TrimSpace(prompt)

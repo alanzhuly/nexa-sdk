@@ -1,4 +1,4 @@
-# Copyright 2024-2025 Nexa AI, Inc.
+# Copyright 2024-2026 Nexa AI, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,13 +32,13 @@ def init():
     os.makedirs(log_dir, exist_ok=True)
 
     log_file = open(os.path.join(log_dir, 'environment'), 'w', encoding='utf-8')
-    print(f"========== Environment ===========")
-    print(f"OS: {platform.system()}")
-    print(f"Arch: {platform.machine()}")
-    print(f"Python version: {sys.version}")
+    print('========== Environment ===========')
+    print(f'OS: {platform.system()}')
+    print(f'Arch: {platform.machine()}')
+    print(f'Python version: {sys.version}')
     res = utils.execute_nexa(['version'])
     if res.returncode != 0:
-        raise RuntimeError("Failed to get nexa version")
+        raise RuntimeError('Failed to get nexa version')
     for line in res.stdout.strip().splitlines():
         print(line)
     log_file.close()

@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,8 @@ func SDKErrorCode(err error) int32 {
 var (
 	ErrCommonNotSupport             = SDKError(C.ML_ERROR_COMMON_NOT_SUPPORTED)
 	ErrCommonModelLoad              = SDKError(C.ML_ERROR_COMMON_MODEL_LOAD)
+	ErrCommonPluginLoad             = SDKError(C.ML_ERROR_COMMON_PLUGIN_LOAD)
+	ErrCommonPluginInvalid          = SDKError(C.ML_ERROR_COMMON_PLUGIN_INVALID)
 	ErrLlmTokenizationContextLength = SDKError(C.ML_ERROR_LLM_TOKENIZATION_CONTEXT_LENGTH)
 )
 

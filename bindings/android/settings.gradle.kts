@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,19 +44,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "NexaDemo"
 
-// Path to nexasdk-bridge library
-val defaultBridgeLibDir = File(rootDir, "../../nexasdk-bridge/bindings/android/app")
-val bridgeLibDirPath: String = System.getenv("NEXA_BRIDGE_ANDROID")
-    ?: defaultBridgeLibDir.absolutePath
-
-print("bridgeLibDirPath:${bridgeLibDirPath} exist? ${File(bridgeLibDirPath).exists()}\n")
-if (File(bridgeLibDirPath).exists()) {
-    gradle.extra["bridgePathExist"] = true
-    include(":bridgeLib")
-    project(":bridgeLib").projectDir = File(bridgeLibDirPath)
-} else {
-    gradle.extra["bridgePathExist"] = false
-}
+// Using cloud SDK - no bridge library needed
+gradle.extra["bridgePathExist"] = false
 
 include(":transform")
 include(":app")

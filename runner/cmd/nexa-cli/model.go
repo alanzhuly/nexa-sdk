@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,6 @@ func list() *cobra.Command {
 		Short:   "List all cached models",
 		Long:    "Display all cached models in a formatted table, showing model names, types, and sizes.",
 	}
-	verbose := listCmd.Flags().BoolP("verbose", "v", false, "show detailed model info")
 
 	listCmd.Run = func(cmd *cobra.Command, args []string) {
 		s := store.Get()
@@ -150,7 +149,7 @@ func list() *cobra.Command {
 		tw := table.NewWriter()
 		tw.SetOutputMirror(os.Stdout)
 		tw.SetStyle(table.StyleLight)
-		if *verbose {
+		if verbose {
 			tw.AppendHeader(table.Row{"NAME", "SIZE", "PLUGIN", "TYPE", "QUANTS"})
 			for _, model := range models {
 				tw.AppendRow(table.Row{

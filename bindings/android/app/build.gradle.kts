@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +25,12 @@ android {
 
     signingConfigs {
         create("release") {
+            // Note: For production builds, use environment variables or local.properties
+            // Example: storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
             storeFile = file("test")
-            storePassword = "123456"
+            storePassword = project.findProperty("KEYSTORE_PASSWORD")?.toString() ?: "123456"
             keyAlias = "test"
-            keyPassword = "123456"
+            keyPassword = project.findProperty("KEY_PASSWORD")?.toString() ?: "123456"
         }
     }
 
@@ -89,7 +91,11 @@ val bridgePathExist = gradle.extra["bridgePathExist"] as Boolean
 print("bridgePathExist: $bridgePathExist\n")
 
 dependencies {
-    implementation("ai.nexa:core:0.0.16")
+
+    // ===== NEXA CLOUD SDK =====
+    // Using cloud SDK instead of local bridge - latest version
+    implementation("ai.nexa:core:+")
+    // ===== NEXA CLOUD SDK END =====
     implementation(project(":transform"))
     implementation(":okdownload-core@aar")
     implementation(":okdownload-sqlite@aar")
@@ -98,6 +104,10 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation(libs.glide)
     implementation(libs.gson)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.strikethrough)
+    implementation(libs.markwon.tables)
+    implementation(libs.markwon.linkify)
     implementation(libs.recyclerview)
     implementation(libs.toaster)
     implementation(libs.material)
@@ -114,6 +124,9 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.constraintlayout)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

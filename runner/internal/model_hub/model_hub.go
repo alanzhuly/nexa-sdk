@@ -1,4 +1,4 @@
-// Copyright 2024-2025 Nexa AI, Inc.
+// Copyright 2024-2026 Nexa AI, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package model_hub
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,10 +30,13 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"golang.org/x/sync/errgroup"
 	"resty.dev/v3"
 
 	"github.com/NexaAI/nexa-sdk/runner/internal/types"
 )
+
+const ProgressSuffix = ".progress"
 
 type ModelFileInfo struct {
 	Name string `json:"name"`
@@ -128,11 +132,12 @@ func GetFileContent(ctx context.Context, modelName, fileName string) ([]byte, er
 
 type downloadTask struct {
 	OutputPath string
-
-	ModelName string
-	FileName  string
-	Offset    int64
-	Limit     int64
+	ModelName  string
+	FileName   string
+	Offset     int64
+	Limit      int64
+	MarkerPath string
+	ChunkIndex int
 }
 
 const (
@@ -143,7 +148,6 @@ func StartDownload(ctx context.Context, modelName, outputPath string, files []Mo
 	slog.Info("Starting download", "model", modelName, "outputPath", outputPath, "files", files)
 
 	hub, err := getHub(ctx, modelName)
-
 	if err != nil {
 		resCh := make(chan types.DownloadInfo)
 		errCh := make(chan error, 1)
@@ -156,87 +160,97 @@ func StartDownload(ctx context.Context, modelName, outputPath string, files []Mo
 	maxConcurrency := hub.MaxConcurrency()
 	resCh := make(chan types.DownloadInfo)
 	errCh := make(chan error, maxConcurrency)
-
 	slog.Info("GetHub", "hub", reflect.TypeOf(hub), "maxConcurrency", maxConcurrency)
 
 	go func() {
 		defer close(errCh)
 		defer close(resCh)
 
-		var downloaded int64
 		var totalSize int64
 		for _, f := range files {
 			totalSize += f.Size
 		}
+		var downloaded int64
+		var markerPaths []string
+		g, gctx := errgroup.WithContext(ctx)
+		g.SetLimit(maxConcurrency)
 
-		// create tasks
-		tasks := make(chan downloadTask, maxConcurrency)
-		nctx, cancel := context.WithCancel(ctx)
+		for _, f := range files {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(outputPath, f.Name)), 0o755); err != nil {
+				errCh <- fmt.Errorf("failed to create directory: %v, %s", err, f.Name)
+				return
+			}
+			chunkSize := max(minChunkSize, f.Size/128)
+			nChunks := int((f.Size + chunkSize - 1) / chunkSize)
+			outPath := filepath.Join(outputPath, f.Name)
+			markerPath := filepath.Join(outputPath, f.Name+ProgressSuffix)
 
-		var wg1 sync.WaitGroup
-		wg1.Add(1)
-		go func() {
-			defer wg1.Done()
-			for _, f := range files {
-				err := os.MkdirAll(filepath.Dir(filepath.Join(outputPath, f.Name)), 0o755)
-				if err != nil {
-					errCh <- fmt.Errorf("failed to create directory: %v, %s", err, f.Name)
-					cancel()
+			markers, err := os.ReadFile(markerPath)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				errCh <- err
+				return
+			}
+			if err != nil || len(markers) != nChunks {
+				markers = make([]byte, nChunks)
+				if err := os.WriteFile(markerPath, markers, 0o644); err != nil {
+					errCh <- err
 					return
 				}
+			}
+			file, err := os.OpenFile(outPath, os.O_RDWR|os.O_CREATE, 0o644)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if fi, _ := file.Stat(); fi == nil || fi.Size() < f.Size {
+				if err := file.Truncate(f.Size); err != nil {
+					file.Close()
+					errCh <- err
+					return
+				}
+			}
+			file.Close()
+			markerPaths = append(markerPaths, markerPath)
 
-				// create task
-				task := downloadTask{
+			slog.Info("Download file", "name", f.Name, "size", f.Size, "chunkSize", chunkSize)
+
+			for i, marker := range markers {
+				if marker == 0x01 {
+					downloaded += min(chunkSize, f.Size-int64(i)*chunkSize)
+					continue
+				}
+				offset := int64(i) * chunkSize
+				t := downloadTask{
 					OutputPath: outputPath,
 					ModelName:  modelName,
 					FileName:   f.Name,
+					Offset:     offset,
+					Limit:      min(chunkSize, f.Size-offset),
+					MarkerPath: markerPath,
+					ChunkIndex: i,
 				}
-
-				// enqueue tasks
-				chunkSize := max(minChunkSize, f.Size/128)
-				slog.Info("Download file", "name", f.Name, "size", f.Size, "chunkSize", chunkSize)
-				for task.Offset = 0; task.Offset < f.Size; task.Offset += chunkSize {
-					task.Limit = min(chunkSize, f.Size-task.Offset)
-
-					// send chunk
-					select {
-					case tasks <- task:
-					case <-nctx.Done():
-						slog.Warn("download canceled", "error", nctx.Err())
-						return
+				g.Go(func() error {
+					if err := doTask(gctx, hub, t); err != nil {
+						slog.Error("Download task failed", "task", t, "error", err)
+						return err
 					}
-				}
-			}
-		}()
-
-		// concurrent control
-		var wg2 sync.WaitGroup
-		for range maxConcurrency {
-			wg2.Add(1)
-			go func() {
-				defer wg2.Done()
-
-				for task := range tasks {
-					err := doTask(nctx, hub, task)
-					if err != nil {
-						slog.Error("Download task failed", "task", task, "error", err)
-						errCh <- err
-						cancel()
-						return
-					}
-
 					resCh <- types.DownloadInfo{
-						TotalDownloaded: atomic.AddInt64(&downloaded, task.Limit),
+						TotalDownloaded: atomic.AddInt64(&downloaded, t.Limit),
 						TotalSize:       totalSize,
 					}
-				}
-			}()
+					return nil
+				})
+			}
 		}
 
-		wg1.Wait()
-		close(tasks)
-		wg2.Wait()
-		cancel()
+		if err := g.Wait(); err != nil {
+			errCh <- err
+			return
+		}
+		for _, p := range markerPaths {
+			_ = os.Remove(p)
+		}
+		slog.Info("download complete", "model", modelName, "outputPath", outputPath)
 	}()
 
 	return resCh, errCh
@@ -316,19 +330,20 @@ func doTask(ctx context.Context, hub ModelHub, task downloadTask) error {
 	if err != nil {
 		return err
 	}
-
-	_, err = file.Seek(task.Offset, io.SeekStart)
+	defer file.Close()
+	if _, err := file.Seek(task.Offset, io.SeekStart); err != nil {
+		return err
+	}
+	if err := hub.GetFileContent(ctx, task.ModelName, task.FileName, task.Offset, task.Limit, file); err != nil {
+		return err
+	}
+	marker, err := os.OpenFile(task.MarkerPath, os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-
-	err = hub.GetFileContent(ctx, task.ModelName, task.FileName, task.Offset, task.Limit, file)
-	if err != nil {
-		file.Close()
-		return err
-	}
-
-	return file.Close()
+	defer marker.Close()
+	_, _ = marker.WriteAt([]byte{0x01}, int64(task.ChunkIndex))
+	return nil
 }
 
 func code2error(client *resty.Client, response *resty.Response) error {
