@@ -45,10 +45,10 @@ NexaSDK supports latest models **weeks or months before anyone else** — Qwen3-
 
 **Download:**
 
-| Windows                                                                                                  | macOS                                                                                                   | Linux                                                                                        |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [arm64 (Qualcomm NPU)](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_windows_arm64.exe) | [arm64 (Apple Silicon)](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_macos_arm64.pkg) | [arm64](https://github.com/NexaAI/nexa-sdk/releases/latest/download/nexa-cli_linux_arm64.sh) |
-| [x64 (Intel/AMD NPU)](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_windows_x86_64.exe) | [x64](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_macos_x86_64.pkg)                  | [x64](https://github.com/NexaAI/nexa-sdk/releases/latest/download/nexa-cli_linux_x86_64.sh)  |
+| Windows                                                                                                  | Linux                                                                                        |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [arm64 (Qualcomm NPU)](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_windows_arm64.exe) | [arm64](https://github.com/NexaAI/nexa-sdk/releases/latest/download/nexa-cli_linux_arm64.sh) |
+| [x64](https://public-storage.nexa4ai.com/nexa_sdk/downloads/nexa-cli_windows_x86_64.exe) | [x64](https://github.com/NexaAI/nexa-sdk/releases/latest/download/nexa-cli_linux_x86_64.sh)  |
 
 **Run your first model:**
 
@@ -64,7 +64,7 @@ nexa infer NexaAI/OmniNeural-4B
 ```
 
 - **Models:** LLM, Multimodal, ASR, OCR, Rerank, Object Detection, Image Generation, Embedding
-- **Formats:** GGUF, MLX, NEXA
+- **Formats:** GGUF, NEXA
 - 📖 [CLI Reference Docs](https://docs.nexa.ai/en/nexa-sdk-go/NexaCLI)
 
 ---
@@ -89,7 +89,7 @@ for token in llm.generate_stream(prompt, GenerationConfig(max_tokens=100)):
 ```
 
 - **Models:** LLM, Multimodal, ASR, OCR, Rerank, Object Detection, Image Generation, Embedding
-- **Formats:** GGUF, MLX, NEXA
+- **Formats:** GGUF, NEXA
 - 📖 [Python SDK Docs](https://docs.nexa.ai/en/nexa-sdk-python/quickstart)
 
 ---
@@ -162,7 +162,7 @@ docker run --rm -it --privileged \
 | NPU support                              | ✅ NPU-first                                               | ❌         | ❌            | ❌            |
 | Android SDK support                  | ✅ NPU/GPU/CPU support                                     | ⚠️         | ⚠️            | ❌            |
 | Linux support (Docker image)             | ✅                                                         | ✅         | ✅            | ❌            |
-| Day-0 model support in GGUF, MLX, NEXA   | ✅                                                         | ❌         | ⚠️            | ❌            |
+| Day-0 model support  | ✅                                                         | ❌         | ⚠️            | ❌            |
 | Full multimodality support               | ✅ Image, Audio, Text, Embedding, Rerank, ASR, TTS         | ⚠️         | ⚠️            | ⚠️            |
 | Cross-platform support                   | ✅ Desktop, Mobile (Android, iOS), Automotive, IoT (Linux) | ⚠️         | ⚠️            | ⚠️            |
 | One line of code to run                  | ✅                                                         | ✅         | ⚠️            | ✅            |
