@@ -12,13 +12,6 @@
     <a href="https://docs.nexa.ai">
         <img src="https://img.shields.io/badge/docs-website-brightgreen?logo=readthedocs" alt="Documentation">
     </a>
-    <a href="https://sdk.nexa.ai/wishlist">
-        <img src="https://img.shields.io/badge/🎯_Vote_for-Next_Models-ff69b4?style=flat-square" alt="Vote for Next Models">
-    </a>
-    <a href="https://x.com/nexa_ai"><img alt="X account" src="https://img.shields.io/twitter/url/https/twitter.com/diffuserslib.svg?style=social&label=Follow%20%40Nexa_AI"></a>
-    <a href="https://discord.com/invite/nexa-ai">
-        <img src="https://img.shields.io/discord/1192186167391682711?color=5865F2&logo=discord&logoColor=white&style=flat-square" alt="Join us on Discord">
-    </a>
   </p>
 </div>
 
@@ -167,7 +160,7 @@ docker run --rm -it --privileged \
 | Features                                 | **NexaSDK**                                                | **Ollama** | **llama.cpp** | **LM Studio** |
 | ---------------------------------------- | ---------------------------------------------------------- | ---------- | ------------- | ------------- |
 | NPU support                              | ✅ NPU-first                                               | ❌         | ❌            | ❌            |
-| Android/iOS SDK support                  | ✅ NPU/GPU/CPU support                                     | ⚠️         | ⚠️            | ❌            |
+| Android SDK support                  | ✅ NPU/GPU/CPU support                                     | ⚠️         | ⚠️            | ❌            |
 | Linux support (Docker image)             | ✅                                                         | ✅         | ✅            | ❌            |
 | Day-0 model support in GGUF, MLX, NEXA   | ✅                                                         | ❌         | ⚠️            | ❌            |
 | Full multimodality support               | ✅ Image, Audio, Text, Embedding, Rerank, ASR, TTS         | ⚠️         | ⚠️            | ⚠️            |
