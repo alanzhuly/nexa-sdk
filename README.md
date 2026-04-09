@@ -17,9 +17,9 @@
 
 # NexaSDK
 
-**NexaSDK lets you build the smartest and fastest on-device AI with minimum energy.** It is a highly performant local inference framework that runs the latest multimodal AI models locally on NPU, GPU, and CPU - across Android, Windows, Linux, macOS, and iOS devices with a few lines of code.
+**NexaSDK lets you build the smartest and fastest on-device AI with minimum energy.** It is a highly performant local inference framework that runs the latest multimodal AI models locally on NPU, GPU, and CPU - across Android, Windows, and Linux devices with a few lines of code.
 
-NexaSDK supports latest models **weeks or months before anyone else** — Qwen3-VL, DeepSeek-OCR, Gemma3n (Vision), and more.
+NexaSDK supported latest models **weeks or months before anyone else** — Qwen3-VL, DeepSeek-OCR, Gemma3n (Vision), and more.
 
 > ⭐ **Star this repo** to keep up with exciting updates and new releases about latest on-device AI capabilities.
 
@@ -164,7 +164,7 @@ docker run --rm -it --privileged \
 | Linux support (Docker image)             | ✅                                                         | ✅         | ✅            | ❌            |
 | Day-0 model support  | ✅                                                         | ❌         | ⚠️            | ❌            |
 | Full multimodality support               | ✅ Image, Audio, Text, Embedding, Rerank, ASR, TTS         | ⚠️         | ⚠️            | ⚠️            |
-| Cross-platform support                   | ✅ Desktop, Mobile (Android, iOS), Automotive, IoT (Linux) | ⚠️         | ⚠️            | ⚠️            |
+| Cross-platform support                   | ✅ Desktop, Mobile (Android), Automotive, IoT (Linux) | ⚠️         | ⚠️            | ⚠️            |
 | One line of code to run                  | ✅                                                         | ✅         | ⚠️            | ✅            |
 | OpenAI-compatible API + Function calling | ✅                                                         | ✅         | ✅            | ✅            |
 
